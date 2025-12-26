@@ -11,13 +11,41 @@ from trl import SFTTrainer, SFTConfig
 import torch
 torch._dynamo.config.disable = True
 import os, re
+from pathlib import Path
 from transformers import TextStreamer, GenerationConfig
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # --- CONFIGURAÇÃO DE CAMINHOS E MODELO ---
-# ⚠️ Ajuste estes caminhos se for necessário!
-LORA_ADAPTER_PATH = r"C:\Users\robso\Documents\FIAP-POS\fase3-fiap\tech-challenge-3\lora_model_qwen3_medquad"
-MODEL_BASE = "unsloth/Qwen3-1.7B"
-MEU_ARQUIVO_DATASET = r"C:\Users\robso\Documents\FIAP-POS\fase3-fiap\tech-challenge-3\dataset_medquad_fine_tuning.jsonl"
+# Usar variáveis de ambiente com fallbacks
+LORA_ADAPTER_PATH = os.getenv(
+    'LORA_ADAPTER_PATH',
+    str(Path(__file__).parent.parent / 'lora_model_qwen3_medquad')
+)
+LORA_ADAPTER_PATH = os.path.abspath(os.path.expanduser(LORA_ADAPTER_PATH))
+
+MODEL_BASE = os.getenv('MODEL_BASE', 'unsloth/Qwen3-1.7B')
+
+# Dataset path
+DATASET_PATH = os.getenv(
+    'DATASET_PATH',
+    str(Path(__file__).parent.parent / 'dataset_medquad_ft.jsonl')
+)
+DATASET_PATH = os.path.abspath(os.path.expanduser(DATASET_PATH))
+
+# Configurações de treinamento (com fallbacks)
+LORA_R = int(os.getenv('LORA_R', '16'))
+LORA_ALPHA = int(os.getenv('LORA_ALPHA', '16'))
+LORA_DROPOUT = float(os.getenv('LORA_DROPOUT', '0'))
+LEARNING_RATE = float(os.getenv('LEARNING_RATE', '2e-4'))
+BATCH_SIZE = int(os.getenv('BATCH_SIZE', '2'))  # Mínimo 2 para padding-free training
+GRADIENT_ACCUMULATION_STEPS = int(os.getenv('GRADIENT_ACCUMULATION_STEPS', '4'))
+# MAX_STEPS: se não definido, usa 60. Se definido como vazio ou "None", usa None para treino completo
+max_steps_env = os.getenv('MAX_STEPS', '60')
+MAX_STEPS = int(max_steps_env) if max_steps_env and max_steps_env.lower() != 'none' else None
+MAX_SEQ_LENGTH = int(os.getenv('MAX_SEQ_LENGTH', '2048'))
 
 
 # ==============================================================================
@@ -34,7 +62,7 @@ if __name__ == '__main__':
     # corretamente na GPU, evitando dispatch para CPU ou disco.
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_BASE,
-        max_seq_length = 2048,
+        max_seq_length = MAX_SEQ_LENGTH,
         load_in_4bit = True, # QLoRA: 4 bit quantization
         load_in_8bit = False,
         full_finetuning = False,
@@ -45,11 +73,11 @@ if __name__ == '__main__':
     print("Configuring LoRA adapter...")
     model = FastLanguageModel.get_peft_model(
         model,
-        r = 16,
+        r = LORA_R,
         target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
                           "gate_proj", "up_proj", "down_proj",],
-        lora_alpha = 16,
-        lora_dropout = 0,
+        lora_alpha = LORA_ALPHA,
+        lora_dropout = LORA_DROPOUT,
         bias = "none",
         use_gradient_checkpointing = "unsloth",
         random_state = 3407,
@@ -66,14 +94,33 @@ if __name__ == '__main__':
     )
 
     # 2. 🎯 Carregar o seu dataset local
-    print(f"[STATUS] Carregando dataset local: {MEU_ARQUIVO_DATASET}")
+    print(f"[STATUS] Carregando dataset local: {DATASET_PATH}")
     
     # Adicionado num_proc=1 para desabilitar o multiprocessamento na tokenização,
     # que é a fonte do RuntimeError no Windows.
-    dataset = load_dataset("json", data_files=MEU_ARQUIVO_DATASET, split = "train", num_proc=1)
+    dataset = load_dataset("json", data_files=DATASET_PATH, split = "train", num_proc=1)
 
-    # 3. ⚠️ IMPORTANTE: Como seu dataset já parece estar no formato 'text' pronto,
-    # pulamos as etapas de formatação, e o SFTTrainer usará a coluna "text".
+    # 3. Converter dataset para formato Qwen3 (se necessário)
+    print("[STATUS] Convertendo dataset para formato Qwen3...")
+    def convert_to_qwen3_format(example):
+        """Converte formato '### Pergunta: ... ### Resposta: ...' para formato Qwen3"""
+        text = example.get("text", "")
+        
+        # Extrair pergunta e resposta do formato atual
+        if "### Pergunta:" in text and "### Resposta:" in text:
+            parts = text.split("### Resposta:")
+            pergunta = parts[0].replace("### Pergunta:", "").strip()
+            resposta = parts[1].strip() if len(parts) > 1 else ""
+            
+            # Formato Qwen3: <start_of_turn>user\n{pergunta}<end_of_turn>\n<start_of_turn>model\n{resposta}<end_of_turn>
+            formatted_text = f"<start_of_turn>user\n{pergunta}<end_of_turn>\n<start_of_turn>model\n{resposta}<end_of_turn>"
+            return {"text": formatted_text}
+        else:
+            # Se já estiver no formato correto, retorna como está
+            return {"text": text}
+    
+    dataset = dataset.map(convert_to_qwen3_format, num_proc=1)
+    print(f"[STATUS] Dataset convertido. Total de exemplos: {len(dataset)}")
 
     # --- TREINAR O MODELO ---
     print("\n" + "="*60)
@@ -83,28 +130,37 @@ if __name__ == '__main__':
     # Cria o diretório de salvamento, se não existir
     os.makedirs(LORA_ADAPTER_PATH, exist_ok=True)
 
+    # Preparar argumentos do SFTConfig
+    sft_config_args = {
+        "output_dir": LORA_ADAPTER_PATH, # Onde logs e checkpoints serão salvos
+        "dataset_text_field": "text", # Usa a coluna 'text' pré-formatada
+        "per_device_train_batch_size": BATCH_SIZE,
+        "gradient_accumulation_steps": GRADIENT_ACCUMULATION_STEPS,
+        "warmup_steps": 5,
+        "learning_rate": LEARNING_RATE,
+        "logging_steps": 10,
+        "optim": "adamw_8bit",
+        "weight_decay": 0.001,
+        "lr_scheduler_type": "linear",
+        "seed": 3407,
+        "report_to": "none",
+        "fp16": not torch.cuda.is_bf16_supported(), # Ajuste automático para tipo de precisão
+        "bf16": torch.cuda.is_bf16_supported(),
+    }
+    
+    # Adicionar max_steps apenas se não for None (para evitar erro de comparação)
+    if MAX_STEPS is not None:
+        sft_config_args["max_steps"] = MAX_STEPS
+        print(f"[INFO] Treinamento limitado a {MAX_STEPS} steps")
+    else:
+        print("[INFO] Treinamento completo (sem limite de steps)")
+
     trainer = SFTTrainer(
         model = model,
         tokenizer = tokenizer,
         train_dataset = dataset,
         eval_dataset = None,
-        args = SFTConfig(
-            output_dir = LORA_ADAPTER_PATH, # Onde logs e checkpoints serão salvos
-            dataset_text_field = "text", # Usa a coluna 'text' pré-formatada
-            per_device_train_batch_size = 1,
-            gradient_accumulation_steps = 4, # Batch efetivo de 4
-            warmup_steps = 5,
-            max_steps = 60, # Definido para um teste rápido. Mude para None para treino completo!
-            learning_rate = 2e-4,
-            logging_steps = 10,
-            optim = "adamw_8bit",
-            weight_decay = 0.001,
-            lr_scheduler_type = "linear",
-            seed = 3407,
-            report_to = "none",
-            fp16 = not torch.cuda.is_bf16_supported(), # Ajuste automático para tipo de precisão
-            bf16 = torch.cuda.is_bf16_supported(),
-        ),
+        args = SFTConfig(**sft_config_args),
     )
 
     # --- MÁSCARA PARA TREINAR APENAS NAS RESPOSTAS (Melhora a precisão) ---

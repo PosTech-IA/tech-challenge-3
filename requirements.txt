@@ -1,2 +1,108 @@
-pip install "unsloth[windows] @ git+https://github.com/unslothai/unsloth.git"
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+# ==============================================================================
+# Tech Challenge 3 - Requirements
+# ==============================================================================
+# Instale as dependências na ordem especificada abaixo
+#
+# IMPORTANTE: Instale primeiro o PyTorch com CUDA, depois o Unsloth,
+# e por último as outras dependências
+#
+# Ordem de instalação recomendada:
+# 1. pip install --upgrade pip setuptools wheel
+# 2. pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# 3. pip install "unsloth[windows] @ git+https://github.com/unslothai/unsloth.git"  # Windows
+#    pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"  # Linux/macOS
+# 4. pip install -r requirements.txt
+# ==============================================================================
+
+# ==============================================================================
+# PyTorch e CUDA (instalar separadamente com index-url)
+# ==============================================================================
+# Para CUDA 12.6:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+#
+# Para CUDA 11.8:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#
+# Para CPU apenas (não recomendado):
+# pip install torch torchvision torchaudio
+# ==============================================================================
+
+# ==============================================================================
+# Unsloth (instalar separadamente do GitHub)
+# ==============================================================================
+# Windows:
+# pip install "unsloth[windows] @ git+https://github.com/unslothai/unsloth.git"
+#
+# Linux/macOS:
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+#
+# Nota: O Unsloth instala automaticamente:
+# - transformers
+# - datasets
+# - trl
+# - accelerate
+# - bitsandbytes
+# - peft
+# - e outras dependências relacionadas
+# ==============================================================================
+
+# ==============================================================================
+# LangChain e Componentes Core
+# ==============================================================================
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+langchain-huggingface>=0.0.1
+langchain-text-splitters>=0.0.1
+
+# FAISS para vector stores (usado nos scripts de treinamento)
+faiss-cpu>=1.7.4  # Para CPU
+# faiss-gpu>=1.7.4  # Para GPU (descomente se tiver GPU e quiser melhor performance)
+
+# Sentence Transformers (para embeddings no script 02)
+sentence-transformers>=2.2.0
+
+# ==============================================================================
+# LangGraph (para construção do agente)
+# ==============================================================================
+langgraph>=0.0.20
+
+# ==============================================================================
+# Banco de Dados
+# ==============================================================================
+psycopg2-binary>=2.9.9
+
+# ==============================================================================
+# Utilitários e Ferramentas
+# ==============================================================================
+# DuckDuckGo Search (para buscas, se necessário)
+ddgs>=0.1.0
+
+# ==============================================================================
+# Visualização e Debugging
+# ==============================================================================
+IPython>=8.0.0
+graphviz>=0.20.1
+pydot>=1.4.2
+
+# ==============================================================================
+# Processamento de Dados (para scripts de treinamento LoRA)
+# ==============================================================================
+# Nota: Alguns destes podem já estar instalados pelo Unsloth
+# datasets>=2.14.0  # Já instalado pelo Unsloth
+# transformers>=4.40.0  # Já instalado pelo Unsloth
+# trl>=0.7.0  # Já instalado pelo Unsloth
+
+# GitPython (para clonar repositórios nos scripts de treinamento)
+GitPython>=3.1.40
+
+# tqdm (para barras de progresso)
+tqdm>=4.66.0
+
+# jq (para processamento JSON no JSONLoader do LangChain)
+jq>=1.6.0
+
+# ==============================================================================
+# Outras Dependências
+# ==============================================================================
+python-dotenv>=1.0.0  # Para carregar variáveis de ambiente do .env

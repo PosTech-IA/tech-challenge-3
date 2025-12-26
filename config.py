@@ -1,18 +1,59 @@
 # config.py
 # Importações de Sistema e DB
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-LORA_ADAPTER_PATH = r"C:\Users\robso\Documents\FIAP-POS\fase3-fiap\tech-challenge-3\lora_model_qwen3_medquad"
-MODEL_BASE = "unsloth/Qwen3-1.7B"
+# Carregar variáveis de ambiente do arquivo .env
+load_dotenv()
+
+# ==============================================================================
+# CONFIGURAÇÕES DO MODELO LoRA
+# ==============================================================================
+
+# Caminho do adaptador LoRA (com fallback para caminho relativo)
+LORA_ADAPTER_PATH = os.getenv(
+    'LORA_ADAPTER_PATH',
+    str(Path(__file__).parent / 'lora_model_qwen3_medquad')
+)
+
+# Garantir que o caminho seja absoluto
+LORA_ADAPTER_PATH = os.path.abspath(os.path.expanduser(LORA_ADAPTER_PATH))
+
+# Modelo base (com fallback)
+MODEL_BASE = os.getenv('MODEL_BASE', 'unsloth/Qwen3-1.7B')
+
+# ==============================================================================
+# CONFIGURAÇÕES DO BANCO DE DADOS
+# ==============================================================================
 
 DB_CONFIG = {
-    'dbname': 'atividade3-fiap',
-    'user': 'user',
-    'password': 'password',
-    'host': 'localhost',
-    'port': '5432'
+    'dbname': os.getenv('DB_NAME', 'atividade3-fiap'),
+    'user': os.getenv('DB_USER', 'user'),
+    'password': os.getenv('DB_PASSWORD', 'password'),
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': os.getenv('DB_PORT', '5432')
 }
+
 DB_NAME = DB_CONFIG['dbname']
+
+# ==============================================================================
+# CONFIGURAÇÕES DO MODELO (Avançado)
+# ==============================================================================
+
+MAX_SEQ_LENGTH = int(os.getenv('MAX_SEQ_LENGTH', '2048'))
+LOAD_IN_4BIT = os.getenv('LOAD_IN_4BIT', 'true').lower() == 'true'
+DEVICE_MAP = os.getenv('DEVICE_MAP', 'auto')
+
+# ==============================================================================
+# CONFIGURAÇÕES DE LOGGING
+# ==============================================================================
+
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+LOG_DIR = os.getenv('LOG_DIR', 'logs')
+
+# Criar diretório de logs se não existir
+os.makedirs(LOG_DIR, exist_ok=True)
 
 # SCHEMA CORRETO DO BANCO
 DATABASE_SCHEMA_INFO = f"""

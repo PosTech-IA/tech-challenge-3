@@ -3,20 +3,19 @@ version: '3.8'
 
 services:
   db:
-    # Imagem oficial do PostgreSQL
-    image: postgres:16-alpine
-    container_name: postgres-atividade3-fiap
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: ${POSTGRES_CONTAINER_NAME:-postgres-atividade3-fiap}
     restart: always
     
     # Variáveis de ambiente para configuração do banco de dados
     environment:
-      POSTGRES_DB: atividade3-fiap
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${DB_NAME:-atividade3-fiap}
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     
     # Mapeamento da porta
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
       
     # Mapeamento de volumes
     volumes:

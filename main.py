@@ -8,6 +8,11 @@ from typing import List, Dict, Any
 
 from langchain_core.messages import HumanMessage
 import logging
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
 # Importar o grafo
 from agent_graph import build_agent_graph
 from config import DB_NAME
@@ -156,6 +161,12 @@ def run_interactive_chat(app, monitor):
 
 def main():
     """Função principal de execução"""
+    
+    # Verificar se o arquivo .env existe (opcional, apenas aviso)
+    if not os.path.exists('.env'):
+        print("⚠️  AVISO: Arquivo .env não encontrado. Usando valores padrão.")
+        print("   Para personalizar, copie env.example para .env e ajuste os valores.")
+        main_logger.warning("Arquivo .env não encontrado. Usando valores padrão.")
     
     main_logger.info("="*60)
     main_logger.info("INICIANDO DR. IA AGENT")

@@ -10,7 +10,13 @@ from transformers import GenerationConfig
 from unsloth.chat_templates import get_chat_template
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage, AIMessage
 
-from config import LORA_ADAPTER_PATH, MODEL_BASE
+from config import (
+    LORA_ADAPTER_PATH, 
+    MODEL_BASE,
+    MAX_SEQ_LENGTH,
+    LOAD_IN_4BIT,
+    DEVICE_MAP
+)
 from logging_llm import setup_logger  # Importar o setup_logger
 
 # ==============================================================================
@@ -30,14 +36,14 @@ print("Loading Model Base and LoRA Adapter...")
 
 try:
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = LORA_ADAPTER_PATH,
-        max_seq_length = 2048,
-        dtype = None,
-        load_in_4bit = True,
-        device_map = "auto",
+        model_name=LORA_ADAPTER_PATH,
+        max_seq_length=MAX_SEQ_LENGTH,
+        dtype=None,
+        load_in_4bit=LOAD_IN_4BIT,
+        device_map=DEVICE_MAP,
     )
     llm_logger.info(f"Modelo carregado com sucesso de: {LORA_ADAPTER_PATH}")
-    llm_logger.info(f"Configuração do modelo: max_seq_length=2048, load_in_4bit=True")
+    llm_logger.info(f"Configuração: max_seq_length={MAX_SEQ_LENGTH}, load_in_4bit={LOAD_IN_4BIT}, device_map={DEVICE_MAP}")
     
     tokenizer = get_chat_template(tokenizer, chat_template = "qwen3-thinking")
     llm_logger.info("Chat template 'qwen3-thinking' aplicado ao tokenizer")
