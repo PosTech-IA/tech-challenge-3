@@ -11,8 +11,9 @@ from langchain_core.messages import HumanMessage
 import logging
 from dotenv import load_dotenv
 
-# Suprimir warnings do transformers sobre generation_config
+# Suprimir warnings do transformers e unsloth
 warnings.filterwarnings('ignore', message='.*generation_config.*default values.*')
+warnings.filterwarnings('ignore', message='.*Unsloth should be imported before.*')
 
 # Carregar variáveis de ambiente
 load_dotenv()

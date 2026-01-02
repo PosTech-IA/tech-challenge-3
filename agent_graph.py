@@ -11,16 +11,12 @@ import logging_llm
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage, AIMessage
 from langgraph.graph import StateGraph, END
 
-# Suprimir warnings do transformers sobre generation_config
+# Suprimir warnings do transformers e unsloth
 warnings.filterwarnings('ignore', message='.*generation_config.*default values.*')
 warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
+warnings.filterwarnings('ignore', message='.*Unsloth should be imported before.*')
 
-from config import SYSTEM_PROMPT, DB_NAME
-from monitoring import MonitoringSystem
-from tools import tool_map, tools
-import psycopg2
-from psycopg2 import extras
-from transformers import GenerationConfig
+# IMPORTANTE: Importar llm_model ANTES de transformers para garantir que unsloth seja carregado primeiro
 from llm_model import (
     model, 
     tokenizer, 
@@ -30,6 +26,13 @@ from llm_model import (
     clean_llm_response,
     compress_context
 )
+
+from config import SYSTEM_PROMPT, DB_NAME
+from monitoring import MonitoringSystem
+from tools import tool_map, tools
+import psycopg2
+from psycopg2 import extras
+from transformers import GenerationConfig
 from audit_logging import audit_llm_call, audit_state_change, get_request_id
 
 # ==============================================================================
