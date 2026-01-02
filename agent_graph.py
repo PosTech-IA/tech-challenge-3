@@ -4,11 +4,16 @@ import operator
 import time
 import re
 import json
+import warnings
 from typing import TypedDict, Annotated, List, Dict, Any
 import logging
 import logging_llm
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage, AIMessage
 from langgraph.graph import StateGraph, END
+
+# Suprimir warnings do transformers sobre generation_config
+warnings.filterwarnings('ignore', message='.*generation_config.*default values.*')
+warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
 
 from config import SYSTEM_PROMPT, DB_NAME
 from monitoring import MonitoringSystem
@@ -25,6 +30,7 @@ from llm_model import (
     clean_llm_response,
     compress_context
 )
+from audit_logging import audit_llm_call, audit_state_change, get_request_id
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO DE LOGGING
@@ -53,11 +59,16 @@ def monitor_node(state: AgentState):
     
     agent_logger.info("MONITOR NODE - Analytics em Tempo Real")
     
+    # Auditoria de state change
+    request_id = get_request_id()
+    previous_state = "execute_tools" if state.get('messages') and len(state['messages']) > 0 else "initial"
+    audit_state_change(agent_logger, previous_state, "monitor", {"request_id": request_id})
+    
     # Coletar métricas do estado atual
     last_message = state['messages'][-1] if state.get('messages') else None
     
-    # Exibir analytics
-    monitor.print_real_time_metrics("monitor", state)
+    # Exibir analytics (comentado para interface limpa - ainda logado)
+    # monitor.print_real_time_metrics("monitor", state)  # Comentado para interface limpa
     
     # Análise detalhada do estado
     if last_message:
@@ -82,6 +93,10 @@ def call_model_with_tools(state: AgentState):
     
     agent_logger.info("="*40)
     agent_logger.info("NÓ: call_model_with_tools (LLM)")
+    
+    # Auditoria de state change
+    request_id = get_request_id()
+    audit_state_change(agent_logger, "previous", "call_model", {"request_id": request_id})
     
     messages = state["messages"]
     
@@ -113,14 +128,23 @@ def call_model_with_tools(state: AgentState):
     
     inputs = tokenizer(text_input, return_tensors="pt").to(model.device)
     
+    # Configurar GenerationConfig com todos os parâmetros explicitamente para evitar warnings
+    # O warning aparece porque o transformers quer que definamos explicitamente os valores padrão
     generation_config = GenerationConfig(
         max_new_tokens=800,
+        max_length=40960,  # Valor padrão do modelo
         temperature=0.7, 
         do_sample=False,
+        top_k=20,  # Valor padrão do modelo
+        top_p=0.95,  # Valor padrão do modelo
         pad_token_id=tokenizer.eos_token_id,
         eos_token_id=tokenizer.eos_token_id,
+        bos_token_id=151643,  # Valor padrão do modelo
     )
 
+    # Extrair prompt para auditoria
+    prompt_for_audit = text_input[-1000:] if len(text_input) > 1000 else text_input
+    
     output_tokens = model.generate(**inputs, generation_config=generation_config)
     response_text = tokenizer.decode(output_tokens[0], skip_special_tokens=False)
     
@@ -149,13 +173,29 @@ def call_model_with_tools(state: AgentState):
             
         agent_logger.info(f"Tool Call detectado: {tool_calls[0]['name']}")
         result = {"messages": [ai_message]}
+        response_for_audit = f"Tool calls: {[tc['name'] for tc in tool_calls]}"
     else:
         # SEM TOOL CALLS: limpeza normal
         clean_response = clean_llm_response(response_text, text_input)
         agent_logger.info(f"Resposta limpa: {clean_response[:100]}...")
         result = {"messages": [AIMessage(content=clean_response)]}
+        response_for_audit = clean_response
     
     duration = time.time() - start_time
+    duration_ms = duration * 1000
+    
+    # Auditoria da chamada LLM
+    from config import MODEL_BASE
+    audit_llm_call(
+        agent_logger,
+        prompt=prompt_for_audit,
+        response=response_for_audit,
+        model=MODEL_BASE,
+        duration_ms=duration_ms,
+        tokens_used=len(output_tokens[0]) if output_tokens is not None else None,
+        success=True
+    )
+    
     monitor.log_node_execution("call_model", duration)
     agent_logger.debug(f"Tempo de execução do nó call_model: {duration:.2f}s")
     
@@ -233,6 +273,10 @@ def execute_tools(state: AgentState):
     
     agent_logger.info("="*40)
     agent_logger.info("NÓ: execute_tools (Tool Execution + Resposta Natural)")
+    
+    # Auditoria de state change
+    request_id = get_request_id()
+    audit_state_change(agent_logger, "call_model", "execute_tools", {"request_id": request_id})
     
     ai_message = state["messages"][-1]
     

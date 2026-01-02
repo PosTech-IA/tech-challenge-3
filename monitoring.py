@@ -16,14 +16,10 @@ class MonitoringSystem:
             "start_time": time.time()
         }
         
-        # Configurar logger
+        # Configurar logger (usa o sistema de logging configurado, sem console handler próprio)
         self.logger = logging.getLogger(logger_name)
-        if not self.logger.handlers:
-            self.logger.setLevel(logging.INFO)
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+        # Não adiciona handler próprio - deixa o sistema de logging configurado fazer isso
+        # Isso garante que LOG_CONSOLE seja respeitado
     
     def start_timer(self):
         """Inicia um timer para medir duração de execução."""
